@@ -5,8 +5,8 @@ Requisito:  pip install pyserial
 Cierren antes el Serial Monitor de Arduino (solo un programa puede usar el puerto).
 
 Uso:
-  python guardar_csv.py COM5 S01_cuarto.csv    # pide ese archivo al ESP32 y lo guarda
-  python guardar_csv.py COM5                   # espera el volcado automatico al terminar una sesion
+  python entrenamiento.py COM5 S01_cuarto.csv    # pide ese archivo al ESP32 y lo guarda
+  python entrenamiento.py COM5                   # espera el volcado automatico al terminar una sesion
   (en Linux/Mac el puerto es algo como /dev/ttyACM0 o /dev/cu.usbmodem1101)
 
 Aviso: en algunas placas, abrir el puerto reinicia el ESP32. Los archivos guardados en su
