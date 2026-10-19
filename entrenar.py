@@ -10,6 +10,7 @@ Salida  : tabla de errores en pantalla + carpeta resultados/ con predicciones,
 Requisitos:  pip install pandas scikit-learn matplotlib
 
 Uso basico:
+  python entrenar.py                       # usa todos los CSV de entrenamiento/
   python entrenar.py data/merged/*.csv
   python entrenar.py S01_unido.csv S02_unido.csv S03_unido.csv --saltar-min 10
 
@@ -61,10 +62,15 @@ BME = ["temp_c", "rh_pct", "abs_hum_gm3", "log10_gas"]
 DINAMICAS = ["log10_gas", "abs_hum_gm3", "temp_c", "log_n0_3"]
 
 
+CARPETA = "entrenamiento"
+
+
 def cargar(rutas, saltar_min):
     archivos = []
     for r in rutas:
         archivos += sorted(glob.glob(r)) or [r]
+    if not archivos or not any(Path(a).is_file() for a in archivos):
+        sys.exit(f"No hay CSV de entrenamiento en: {', '.join(rutas)}")
     partes = []
     for a in archivos:
         if not Path(a).is_file():
@@ -75,6 +81,12 @@ def cargar(rutas, saltar_min):
             sys.exit(f"{a} no parece salida de merge_aqm65.py (faltan columnas: {faltan})")
         d["archivo"] = Path(a).name
         partes.append(d)
+    sesiones = {}
+    for d in partes:
+        for sid in d["session_id"].unique():
+            if sid in sesiones and sesiones[sid] != d["archivo"].iloc[0]:
+                sys.exit(f"session_id '{sid}' esta en {sesiones[sid]} y en {d['archivo'].iloc[0]}; deben ser distintos.")
+            sesiones[sid] = d["archivo"].iloc[0]
     df = pd.concat(partes, ignore_index=True)
     df["t"] = pd.to_datetime(df["timestamp_local"])
     df = df.sort_values(["session_id", "t"]).reset_index(drop=True)
@@ -236,7 +248,8 @@ def grafica(df, oof, ruta):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("csv", nargs="+", help="CSV(s) generados por merge_aqm65.py (admite comodines)")
+    ap.add_argument("csv", nargs="*", help="CSV(s) generados por merge.py (admite comodines); "
+                    f"si no se da ninguno, usa todos los de la carpeta {CARPETA}/")
     ap.add_argument("--saltar-min", type=int, default=0, help="descartar los primeros N min de cada sesion (calentamiento)")
     ap.add_argument("--ventana", type=int, default=5, help="minutos para promedio movil y tendencia (5)")
     ap.add_argument("--sin-presion", action="store_true", help="no usar pressure_hpa (puede delatar el dia, no el CO2)")
@@ -245,7 +258,8 @@ def main():
     ap.add_argument("--salida", default="resultados", help="carpeta de resultados")
     a = ap.parse_args()
 
-    df = cargar(a.csv, a.saltar_min)
+    rutas = a.csv or [str(Path(CARPETA) / "*.csv")]
+    df = cargar(rutas, a.saltar_min)
     df, cols = crear_features(df, a.ventana, a.sin_presion)
     out = Path(a.salida)
     out.mkdir(parents=True, exist_ok=True)

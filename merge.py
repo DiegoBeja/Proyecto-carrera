@@ -197,7 +197,8 @@ def main():
     ap = argparse.ArgumentParser(description="Une CSV del ESP32 con el export de 1 minuto del AQM65.")
     ap.add_argument("--esp", nargs="+", required=True, help="uno o mas CSV del ESP32")
     ap.add_argument("--aqm", required=True, help="CSV exportado del AQM65 (promedio de 1 minuto)")
-    ap.add_argument("--out", required=True, help="CSV de salida")
+    ap.add_argument("--out", default=None,
+                    help="CSV de salida (por defecto: entrenamiento/<primer --esp>_train.csv)")
     ap.add_argument("--tz", default="America/Tijuana")
     ap.add_argument("--esp-offset-sec", type=float, default=0.0)
     ap.add_argument("--aqm-stamp", choices=["start", "end"], default="start")
@@ -265,6 +266,8 @@ def main():
              ["pm1_est", "pm2_5_est", "bme_n"] + BME_COLS + ["log10_gas", "abs_hum_gm3", "heater_c", "heater_ms", "event",
                                        "co2_ref_ppm"] + ref_cols)
     merged = merged.sort_values(["session_id", "epoch_utc"])[order]
+    if args.out is None:
+        args.out = str(Path("entrenamiento") / f"{Path(args.esp[0]).stem}_train.csv")
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     merged.to_csv(args.out, index=False)
 
