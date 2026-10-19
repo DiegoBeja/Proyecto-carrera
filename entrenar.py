@@ -12,6 +12,7 @@ Requisitos:  pip install pandas scikit-learn matplotlib
 Uso basico:
   python entrenar.py                       # usa todos los CSV de entrenamiento/
   python entrenar.py data/merged/*.csv
+  python entrenar.py data/merged/*.csv --sin-temp-hum   # sin T ni humedad como entradas
   python entrenar.py S01_unido.csv S02_unido.csv S03_unido.csv --saltar-min 10
 
 Con sesiones de prueba final (NO se usan para elegir nada):
@@ -45,6 +46,7 @@ from sklearn.linear_model import BayesianRidge, ElasticNet, HuberRegressor, Line
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import LeaveOneGroupOut
 from sklearn.neighbors import KNeighborsRegressor
+from sklearn.neural_network import MLPRegressor
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVR
@@ -58,6 +60,10 @@ TARGET = "co2_ref_ppm"
 CONTEOS = ["n0_3", "n0_5", "n1_0", "n2_5", "n5_0", "n10"]
 ESTIMADOS = ["pm1_est", "pm2_5_est"]
 BME = ["temp_c", "rh_pct", "abs_hum_gm3", "log10_gas"]
+# columnas de compensar.py (solo se usan si el CSV las trae)
+COMPENSADAS = ["temp_comp", "rh_comp", "gas_dev_pct", "pm2_5_comp"]
+# temperatura y humedad (y sus derivadas); --sin-temp-hum las quita de las entradas
+TEMP_HUM = ["temp_c", "rh_pct", "abs_hum_gm3", "temp_comp", "rh_comp"]
 # columnas sobre las que se calculan promedio movil y tendencia
 DINAMICAS = ["log10_gas", "abs_hum_gm3", "temp_c", "log_n0_3"]
 
@@ -96,10 +102,14 @@ def cargar(rutas, saltar_min):
     return df
 
 
-def crear_features(df, ventana, sin_presion):
+def crear_features(df, ventana, sin_presion, sin_temp_hum=False):
     df = df.copy()
     for c in CONTEOS + ESTIMADOS:
         df["log_" + c] = np.log1p(df[c])
+    comp = [c for c in COMPENSADAS if c in df.columns]
+    if "pm2_5_comp" in comp:
+        df["log_pm2_5_comp"] = np.log1p(df["pm2_5_comp"])
+        comp[comp.index("pm2_5_comp")] = "log_pm2_5_comp"
     g = df.groupby("session_id", sort=False)
     for c in DINAMICAS:
         df[c + f"_m{ventana}"] = g[c].transform(lambda s: s.rolling(ventana, min_periods=1).mean())
@@ -109,9 +119,12 @@ def crear_features(df, ventana, sin_presion):
         + BME
         + [c + f"_m{ventana}" for c in DINAMICAS]
         + [c + f"_d{ventana}" for c in DINAMICAS]
+        + comp
     )
     if not sin_presion:
         cols.append("pressure_hpa")
+    if sin_temp_hum:
+        cols = [c for c in cols if c.rsplit(f"_m{ventana}", 1)[0].rsplit(f"_d{ventana}", 1)[0] not in TEMP_HUM]
     return df, cols
 
 
@@ -127,7 +140,7 @@ def modelos(cols):
     """Modelos pensados para pocos datos: lineales regularizados, kernel, vecinos y arboles chicos."""
     solo_lineal = ColumnTransformer([("c", "passthrough", ["temp_c", "rh_pct"])])
     kernel_gp = ConstantKernel(1.0) * RBF(length_scale=3.0) + WhiteKernel(noise_level=0.5)
-    return {
+    mods = {
         "01_media": DummyRegressor(strategy="mean"),
         "02_lineal_T_HR": make_pipeline(solo_lineal, LinearRegression()),
         "03_ridge": make_pipeline(StandardScaler(), Ridge(alpha=10.0)),
@@ -154,7 +167,18 @@ def modelos(cols):
         "16_gbm_chico": GradientBoostingRegressor(
             n_estimators=100, learning_rate=0.05, max_depth=2, min_samples_leaf=5, subsample=0.8, random_state=0
         ),
+        # red chica (1 capa oculta de 8) con regularizacion fuerte; lbfgs converge mejor que adam con pocos datos
+        "17_mlp_chico": escalado_y(
+            make_pipeline(
+                StandardScaler(),
+                MLPRegressor(hidden_layer_sizes=(8,), activation="tanh", solver="lbfgs", alpha=1.0,
+                             max_iter=5000, random_state=0),
+            )
+        ),
     }
+    if not {"temp_c", "rh_pct"} <= set(cols):
+        del mods["02_lineal_T_HR"]   # sin T y HR de entrada este modelo no existe
+    return mods
 
 
 # --------------------------------------------------------------------------
@@ -253,14 +277,21 @@ def main():
     ap.add_argument("--saltar-min", type=int, default=0, help="descartar los primeros N min de cada sesion (calentamiento)")
     ap.add_argument("--ventana", type=int, default=5, help="minutos para promedio movil y tendencia (5)")
     ap.add_argument("--sin-presion", action="store_true", help="no usar pressure_hpa (puede delatar el dia, no el CO2)")
+    ap.add_argument("--sin-temp-hum", action="store_true",
+                    help="no usar temperatura ni humedad como entradas (si en el entrenamiento casi no variaron)")
     ap.add_argument("--test", nargs="*", default=[], help="session_id de las sesiones de prueba final (se apartan)")
     ap.add_argument("--final", action="store_true", help="entrenar con todo lo demas y evaluar en --test (hacerlo UNA vez)")
     ap.add_argument("--salida", default="resultados", help="carpeta de resultados")
     a = ap.parse_args()
 
+<<<<<<< Updated upstream
     rutas = a.csv or [str(Path(CARPETA) / "*.csv")]
     df = cargar(rutas, a.saltar_min)
     df, cols = crear_features(df, a.ventana, a.sin_presion)
+=======
+    df = cargar(a.csv, a.saltar_min)
+    df, cols = crear_features(df, a.ventana, a.sin_presion, a.sin_temp_hum)
+>>>>>>> Stashed changes
     out = Path(a.salida)
     out.mkdir(parents=True, exist_ok=True)
 
