@@ -11,12 +11,12 @@ Requisitos:  pip install pandas scikit-learn matplotlib
 
 Uso basico:
   python entrenar.py                       # usa todos los CSV de entrenamiento/
-  python entrenar.py data/merged/*.csv
+  python entrenar.py entrenamiento/*.csv
   python entrenar.py S01_unido.csv S02_unido.csv S03_unido.csv --saltar-min 10
 
 Con sesiones de prueba final (NO se usan para elegir nada):
-  python entrenar.py data/merged/*.csv --test S08 S09 S10          # las aparta y no las toca
-  python entrenar.py data/merged/*.csv --test S08 S09 S10 --final  # evalua UNA vez al terminar
+  python entrenar.py entrenamiento/*.csv --test S08 S09 S10          # las aparta y no las toca
+  python entrenar.py entrenamiento/*.csv --test S08 S09 S10 --final  # evalua UNA vez al terminar
 
 Validacion:
   - 2 o mas sesiones : leave-one-session-out (entrena con todas menos una, prueba en esa).

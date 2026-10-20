@@ -7,10 +7,10 @@ Genera un CSV con UNA FILA POR MINUTO: variables de los sensores de bajo costo
 Requisitos:  pip install pandas tzdata
 
 Uso basico (PowerShell):
-  python tools\\merge.py --esp data\\S01.csv --aqm data\\AQM65_Export.csv --out data\\S01_train.csv
+  python merge.py --esp S01.csv --aqm AQM65_Export.csv --out entrenamiento\\S01_train.csv
 
 Varias sesiones a la vez (quedan en un solo archivo; session_id sirve para validar por sesion):
-  python tools\\merge_aqm65.py --esp data\\C1.csv data\\C2.csv --aqm data\\AQM65_Export.csv --out data\\train.csv
+  python merge.py --esp S01.csv S02.csv --aqm AQM65_Export.csv --out entrenamiento\\train.csv
 
 Opciones utiles:
   --esp-offset-sec N      segundos que se SUMAN al reloj del ESP32 para igualarlo al del AQM65

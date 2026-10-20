@@ -7,12 +7,15 @@ El ESP32 guarda un archivo `.csv` en su propia memoria, y un script de Python lo
 ## Contenido del repositorio
 
 ```
-├── firmware/
-│   ├── esp32s3_logger/esp32s3_logger.ino   Registro de PMS5003 + BME688 (programa principal)
-│   └── pms5003_test/pms5003_test.ino       Prueba solo del PMS5003 (diagnóstico)
-├── tools/
-│   └── guardar_csv.py                      Copia el CSV del ESP32 a la PC
-├── data/                                   CSV descargados de cada sesión
+├── esp32s3_logger.ino     Firmware de registro de PMS5003 + BME688 (programa principal)
+├── guardar_csv.py         Copia el CSV del ESP32 a la PC
+├── merge.py               Une el CSV del ESP32 con el export de 1 minuto del AQM65
+├── entrenar.py            Compara modelos y escribe los resultados en resultados/
+├── S01.csv, S02.csv, ...  CSV crudos del ESP32, uno por sesión
+├── aqm65_*.csv            Exports crudos del AQM65
+├── entrenamiento/         CSV unidos (una fila por minuto), listos para entrenar
+├── resultados/            Salidas de entrenar.py (errores, predicciones, gráfica)
+├── CLAUDE.md              Contexto del proyecto para Claude Code
 └── README.md
 ```
 
@@ -43,7 +46,7 @@ En Arduino IDE elige la placa **ESP32S3 Dev Module**. Si conectas el ESP32 por s
 
 ## Parámetros que debes cambiar
 
-Todos están al inicio de `firmware/esp32s3_logger/esp32s3_logger.ino`.
+Todos están al inicio de `esp32s3_logger.ino`.
 
 | Parámetro | Valor por defecto | Qué hace y cuándo cambiarlo |
 | --- | --- | --- |
@@ -120,11 +123,11 @@ El archivo se crea en la memoria del ESP32, no en la PC. Para copiarlo:
 2. Averigua el nombre del archivo con `ls` en el Monitor Serie (antes de cerrarlo).
 3. En PowerShell, desde la carpeta donde quieras que quede el CSV:
    ```
-   python tools\guardar_csv.py COM11 C1_ocupacion.csv
+   python guardar_csv.py COM11 C1_ocupacion.csv
    ```
 
 Qué cambiar en ese comando:
-- **`tools\guardar_csv.py`**: la ruta donde esté el script. Si estás en otra carpeta, usa la ruta completa, por ejemplo `python C:\Users\bombo\Documents\caracterizacion-co2\tools\guardar_csv.py COM11 S01.csv`.
+- **`guardar_csv.py`**: la ruta donde esté el script. Si estás en otra carpeta, usa la ruta completa, por ejemplo `python C:\Users\bombo\OneDrive\Desktop\8vo\ProyectoCarrera\esp32s3_logger\guardar_csv.py COM11 S01.csv`.
 - **`COM11`**: el puerto de tu ESP32 (Arduino IDE → Herramientas → Puerto). En Linux es algo como `/dev/ttyACM0` y en Mac `/dev/cu.usbmodem1101`.
 - **`C1_ocupacion.csv`**: el nombre del archivo en el ESP32 (el id de la sesión más `.csv`).
 
@@ -153,10 +156,6 @@ Cada fila es el promedio de las lecturas de un intervalo.
 | `event` | Evento anotado con el comando `e` |
 | `co2_ref_ppm` | **Vacía.** Se llena con el CO₂ del AQM65 al unir los datos |
 
-## Prueba solo del PMS5003
-
-`firmware/pms5003_test/pms5003_test.ino` solo lee el PMS5003 en el pin 17. Imprime una línea por segundo y, cada 5 s, un diagnóstico (si no llegan datos, si dejaron de llegar, si todo está en 0, o si funciona bien). Se sube y se abre con el Monitor Serie a 115200.
-
 ## Solución de problemas
 
 | Problema | Qué revisar |
@@ -175,7 +174,10 @@ Cada fila es el promedio de las lecturas de un intervalo.
 
 ## Notas del proyecto
 
-- El AQM65 entrega datos cada 5 minutos, así que para entrenar hay que **promediar el CSV del ESP32 en ventanas de 5 minutos** alineadas con la hora del AQM65 y unir el CO₂ en la columna `co2_ref_ppm`.
-- Al evaluar el modelo, separa los datos **por sesión o por día**, nunca por filas al azar.
+- El AQM65 se exporta con **promedio de 1 minuto**. `merge.py` promedia el CSV del ESP32 a 1 minuto, lo alinea con la hora del AQM65 y une el CO₂ en `co2_ref_ppm`, dejando una fila por minuto en `entrenamiento/`.
+- Para unir: `python merge.py --esp S01.csv --aqm <export_aqm65>.csv --out entrenamiento/S01_train.csv`. Si los relojes no coinciden, usa `--esp-offset-sec`.
+- Para entrenar: `python entrenar.py` (usa todos los CSV de `entrenamiento/`). Requiere `pip install pandas tzdata scikit-learn matplotlib`.
+- Al evaluar el modelo, separa los datos **por sesión**, nunca por filas al azar (leave-one-session-out). Algunas sesiones se apartan con `--test` y se evalúan una sola vez al final con `--final`.
+- Solo se usan como entradas las variables del dispositivo final (PMS5003 y BME688); las columnas `aqm_*` son solo referencia.
 - En aire limpio el PM del PMS5003 es casi siempre 0; los conteos por tamaño son más informativos.
 - Antes de usar los sensores en campo, deja el BME688 encendido de 24 a 48 horas de forma continua para que se estabilice, y conserva el mismo perfil de calentador entre sesiones.
