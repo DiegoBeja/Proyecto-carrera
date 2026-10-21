@@ -1,0 +1,45 @@
+{
+  "ventana": 5,
+  "sin_presion": true,
+  "saltar_min": 0,
+  "nombre": "mlp_16_a0.1_tanh",
+  "capas": [
+    16
+  ],
+  "alpha": 0.1,
+  "activacion": "tanh",
+  "parametros": 353,
+  "semillas": 5,
+  "cols": [
+    "log_n0_3",
+    "log_n0_5",
+    "log_n1_0",
+    "log_n2_5",
+    "log_n5_0",
+    "log_n10",
+    "log_pm1_est",
+    "log_pm2_5_est",
+    "temp_c",
+    "rh_pct",
+    "abs_hum_gm3",
+    "log10_gas",
+    "log10_gas_m5",
+    "abs_hum_gm3_m5",
+    "temp_c_m5",
+    "log_n0_3_m5",
+    "log10_gas_d5",
+    "abs_hum_gm3_d5",
+    "temp_c_d5",
+    "log_n0_3_d5"
+  ],
+  "sesiones_entrenamiento": [
+    "S01",
+    "S03"
+  ],
+  "co2_media_entrenamiento": 897.0168067226891,
+  "validacion": {
+    "MAE": 64.27036603530675,
+    "RMSE": 99.80386598546582,
+    "MAE_media": 72.21531358306032
+  }
+}

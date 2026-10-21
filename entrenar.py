@@ -18,6 +18,10 @@ Con sesiones de prueba final (NO se usan para elegir nada):
   python entrenar.py entrenamiento/*.csv --test S08 S09 S10          # las aparta y no las toca
   python entrenar.py entrenamiento/*.csv --test S08 S09 S10 --final  # evalua UNA vez al terminar
 
+Busqueda del MLP (prueba varias redes, elige la mejor y la guarda entrenada):
+  python entrenar.py --test S02 --buscar-mlp --salida modelo_mlp
+  python probar_modelo.py                          # prueba ese modelo en S02
+
 Validacion:
   - 2 o mas sesiones : leave-one-session-out (entrena con todas menos una, prueba en esa).
   - 1 sesion         : bloques contiguos en el tiempo. SOLO sirve para probar que el codigo
@@ -28,15 +32,18 @@ Las columnas aqm_* NUNCA entran como entrada (serian fuga de informacion).
 """
 import argparse
 import glob
+import itertools
+import json
 import sys
 from pathlib import Path
 
+import joblib
 import numpy as np
 import pandas as pd
 from sklearn.base import clone
 from sklearn.compose import ColumnTransformer, TransformedTargetRegressor
 from sklearn.dummy import DummyRegressor
-from sklearn.ensemble import ExtraTreesRegressor, GradientBoostingRegressor, RandomForestRegressor
+from sklearn.ensemble import ExtraTreesRegressor, GradientBoostingRegressor, RandomForestRegressor, VotingRegressor
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, ConstantKernel, WhiteKernel
@@ -255,6 +262,78 @@ def grafica(df, oof, ruta):
     plt.close(fig)
 
 
+# --------------------------------------------------------------------------
+# 5. Busqueda del MLP
+# --------------------------------------------------------------------------
+MLP_CAPAS = [(4,), (8,), (16,), (8, 4)]
+MLP_ALPHAS = [0.1, 1.0, 10.0]
+MLP_ACTIVACIONES = ["tanh", "relu"]
+EMPATE_PPM = 5.0   # diferencias menores a esto se consideran empate; gana la red mas chica
+
+
+def mlp_promedio(capas, alpha, activacion, semillas):
+    """Promedia la prediccion de varias semillas: con pocos datos una sola red es muy inestable."""
+    redes = [
+        (f"s{s}", MLPRegressor(hidden_layer_sizes=capas, activation=activacion, solver="lbfgs",
+                               alpha=alpha, max_iter=5000, random_state=s))
+        for s in range(semillas)
+    ]
+    return escalado_y(make_pipeline(StandardScaler(), VotingRegressor(redes)))
+
+
+def n_parametros(n_entradas, capas):
+    tam = [n_entradas, *capas, 1]
+    return sum(a * b + b for a, b in zip(tam[:-1], tam[1:]))
+
+
+def buscar_mlp(df, cols, purga, semillas, out, info):
+    variantes = {}
+    for capas, alpha, act in itertools.product(MLP_CAPAS, MLP_ALPHAS, MLP_ACTIVACIONES):
+        nombre = f"mlp_{'x'.join(map(str, capas))}_a{alpha:g}_{act}"
+        variantes[nombre] = dict(capas=list(capas), alpha=alpha, activacion=act,
+                                 parametros=n_parametros(len(cols), capas))
+    mods = {"01_media": DummyRegressor(strategy="mean")}
+    mods.update({n: mlp_promedio(tuple(v["capas"]), v["alpha"], v["activacion"], semillas)
+                 for n, v in variantes.items()})
+    print(f"\nProbando {len(variantes)} redes x {semillas} semillas ...")
+    modo, oof = evaluar(df, cols, mods, purga)
+    y = df[TARGET].values
+
+    tg = tabla_global(y, oof)
+    ps = tabla_por_sesion(df, oof)
+    tg["MAE_peor_sesion"] = ps.max()
+    tg["parametros"] = [variantes[n]["parametros"] if n in variantes else 0 for n in tg.index]
+    tg = tg.sort_values("MAE")
+    print(f"\nValidacion: {modo}")
+    print("\n== Redes ordenadas por MAE (ppm) ==")
+    print(tg.round(2).to_string())
+    print("\n== MAE por sesion (ppm), 8 mejores redes ==")
+    print(ps[[n for n in tg.index if n != "01_media"][:8] + ["01_media"]].round(1).to_string())
+    tg.round(3).to_csv(out / "busqueda_mlp.csv")
+
+    # la de menor MAE; si otra esta a menos de EMPATE_PPM, gana la mas chica
+    redes = tg.drop(index="01_media")
+    empatadas = redes[redes["MAE"] <= redes["MAE"].min() + EMPATE_PPM]
+    elegida = empatadas.sort_values(["parametros", "MAE"]).index[0]
+    cfg = variantes[elegida]
+    fila = tg.loc[elegida]
+    print(f"\nRed elegida: {elegida}  (MAE {fila['MAE']:.1f} ppm vs media {tg.loc['01_media', 'MAE']:.1f}; "
+          f"{fila['mejora_vs_media_%']:+.1f} %; {cfg['parametros']} parametros)")
+    if fila["mejora_vs_media_%"] <= 0:
+        print("AVISO: ninguna red le gana a predecir el promedio en la validacion.")
+
+    # se entrena con TODAS las sesiones de entrenamiento y se guarda
+    modelo = mlp_promedio(tuple(cfg["capas"]), cfg["alpha"], cfg["activacion"], semillas).fit(df[cols], y)
+    meta = dict(info, nombre=elegida, **cfg, semillas=semillas, cols=cols,
+                sesiones_entrenamiento=sorted(df["session_id"].unique()),
+                co2_media_entrenamiento=float(y.mean()),
+                validacion=dict(MAE=float(fila["MAE"]), RMSE=float(fila["RMSE"]),
+                                MAE_media=float(tg.loc["01_media", "MAE"])))
+    joblib.dump(dict(modelo=modelo, meta=meta), out / "modelo_mlp.joblib")
+    (out / "modelo_mlp.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"Modelo entrenado con {meta['sesiones_entrenamiento']} y guardado en {out / 'modelo_mlp.joblib'}")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("csv", nargs="*", help="CSV(s) generados por merge.py (admite comodines); "
@@ -265,6 +344,9 @@ def main():
     ap.add_argument("--test", nargs="*", default=[], help="session_id de las sesiones de prueba final (se apartan)")
     ap.add_argument("--final", action="store_true", help="entrenar con todo lo demas y evaluar en --test (hacerlo UNA vez)")
     ap.add_argument("--salida", default="resultados", help="carpeta de resultados")
+    ap.add_argument("--buscar-mlp", action="store_true",
+                    help="probar varias redes MLP, elegir la mejor y guardarla entrenada (en vez de los 17 modelos)")
+    ap.add_argument("--semillas", type=int, default=5, help="semillas promediadas por red en --buscar-mlp (5)")
     a = ap.parse_args()
 
     rutas = a.csv or [str(Path(CARPETA) / "*.csv")]
@@ -282,6 +364,11 @@ def main():
     print(f"CO2 de entrenamiento: min {df[TARGET].min():.0f}  mediana {df[TARGET].median():.0f}  max {df[TARGET].max():.0f} ppm")
     if a.test:
         print(f"Sesiones apartadas para la prueba final: {sorted(test['session_id'].unique())} (no se tocan sin --final)")
+
+    if a.buscar_mlp:
+        info = dict(ventana=a.ventana, sin_presion=a.sin_presion, saltar_min=a.saltar_min)
+        buscar_mlp(df, cols, a.ventana, a.semillas, out, info)
+        return
 
     mods = modelos(cols)
     purga = a.ventana
