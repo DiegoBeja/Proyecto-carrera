@@ -7,7 +7,9 @@ El ESP32 guarda un archivo `.csv` en su propia memoria, y un script de Python lo
 ## Contenido del repositorio
 
 ```
-├── esp32s3_logger/        Firmware: esp32s3_logger.ino + co2_mlp.h + modelo_co2.h (red de CO2)
+├── esp32s3_logger/        Firmware de registro de muestras (PMS5003 + BME688)
+├── esp32s3_co2/           Firmware de la red de CO2 en vivo (co2_mlp.h + modelo_co2.h)
+├── dashboard/             Página local (React + TS) que muestra la predicción del ESP32 por USB
 ├── guardar_csv.py         Copia el CSV del ESP32 a la PC
 ├── merge.py               Une el CSV del ESP32 con el export de 1 minuto del AQM65
 ├── entrenar.py            Compara modelos y escribe los resultados en resultados/
@@ -77,7 +79,7 @@ Notas importantes:
 
 ## Subir el firmware al ESP32
 
-1. Abre `esp32s3_logger/esp32s3_logger.ino` con Arduino IDE (la carpeta ya tiene el nombre que pide el IDE y los `.h` de la red).
+1. Abre `esp32s3_logger/esp32s3_logger.ino` con Arduino IDE (la carpeta ya tiene el nombre que pide el IDE). Para la estimación de CO₂ en vivo se usa `esp32s3_co2/esp32s3_co2.ino` y el dashboard (ver `dashboard/README.md`).
 2. Edita los parámetros de la sección anterior.
 3. Elige la placa y el puerto (Herramientas → Placa / Puerto).
 4. Presiona **Subir**. No hay que repetirlo después; el programa queda grabado.

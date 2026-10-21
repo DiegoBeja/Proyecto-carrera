@@ -64,6 +64,7 @@ class EstimadorCO2 {
       hist[k][0] = actual[k];
     }
     if (n < MLP_VENTANA + 1) n++;
+    total++;
     int enMedia = n < MLP_VENTANA ? n : MLP_VENTANA;
     for (int k = 0; k < 4; k++) {
       double s = 0;
@@ -78,9 +79,10 @@ class EstimadorCO2 {
     return mlpPredecir(x);
   }
 
-  int minutos() const { return n; }
+  long minutos() const { return total; }   // minutos estimados desde que arranco
 
  private:
   double hist[4][MLP_VENTANA + 1] = {};
-  int n = 0;
+  int n = 0;        // minutos guardados en hist (llega hasta MLP_VENTANA + 1)
+  long total = 0;
 };

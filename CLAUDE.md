@@ -29,7 +29,9 @@ Opciones útiles de `merge.py`: `--esp-offset-sec`, `--aqm-stamp start|end`, `--
 
 ## Estructura del repositorio
 
-- `esp32s3_logger/`: firmware de registro (PMS5003 + BME688) y la red de CO2 (`co2_mlp.h`, `modelo_co2.h` generado por `exportar_modelo.py`).
+- `esp32s3_logger/`: firmware de registro de muestras (PMS5003 + BME688).
+- `esp32s3_co2/`: firmware que solo corre la red de CO2 y la manda por serial (`co2_mlp.h`, `modelo_co2.h` generado por `exportar_modelo.py`). Protocolo `#HOLA/#ESTADO/#PRED/#AVISO`.
+- `dashboard/`: página local React + TS que lee el ESP32 por Web Serial (Chrome/Edge). `npm install` y `npm run dev`.
 - `merge.py`, `entrenar.py`, `guardar_csv.py`: scripts descritos arriba.
 - `S01.csv`, `S02.csv`, `S03.csv`: CSV crudos del ESP32 por sesión.
 - `aqm65_*.csv`: exports crudos del AQM65 (el archivo tiene un encabezado de varias líneas antes de los datos).
