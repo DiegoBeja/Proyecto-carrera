@@ -11,7 +11,7 @@ Ambos van conectados a un **ESP32-S3** que registra las lecturas en un CSV con i
 
 ## Flujo de trabajo
 
-1. **Registro**: `esp32s3_logger.ino` (firmware del ESP32-S3) guarda el CSV en la memoria del ESP32.
+1. **Registro**: `esp32s3_logger/esp32s3_logger.ino` (firmware del ESP32-S3) guarda el CSV en la memoria del ESP32.
 2. **Descarga a la PC**: `guardar_csv.py` copia por serial el CSV del ESP32 a la PC (`python guardar_csv.py COM5 S01.csv`). Requiere `pyserial` y cerrar antes el Monitor Serie.
 3. **Unión con el AQM65**: `merge.py` une el CSV del ESP32 con el export de 1 minuto del AQM65 y genera **una fila por minuto** lista para entrenar (salida en `entrenamiento/`, p. ej. `S01_train.csv`).
 4. **Entrenamiento y comparación**: `entrenar.py` compara modelos y escribe en `resultados/` (`errores_globales.csv`, `predicciones_cv.csv`, `importancias_extra_trees.csv`, `real_vs_predicho.png`).
@@ -29,7 +29,7 @@ Opciones útiles de `merge.py`: `--esp-offset-sec`, `--aqm-stamp start|end`, `--
 
 ## Estructura del repositorio
 
-- `esp32s3_logger.ino`: firmware de registro (PMS5003 + BME688).
+- `esp32s3_logger/`: firmware de registro (PMS5003 + BME688) y la red de CO2 (`co2_mlp.h`, `modelo_co2.h` generado por `exportar_modelo.py`).
 - `merge.py`, `entrenar.py`, `guardar_csv.py`: scripts descritos arriba.
 - `S01.csv`, `S02.csv`, `S03.csv`: CSV crudos del ESP32 por sesión.
 - `aqm65_*.csv`: exports crudos del AQM65 (el archivo tiene un encabezado de varias líneas antes de los datos).

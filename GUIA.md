@@ -25,7 +25,7 @@ Está escrita para poder trabajar sin tener que volver a preguntar.
 
 | Archivo | Qué es |
 |---|---|
-| `esp32s3_logger.ino` | Firmware del ESP32. Mide siempre y guarda una fila promedio cada `interval` segundos durante una sesión. |
+| `esp32s3_logger/esp32s3_logger.ino` | Firmware del ESP32 (con `co2_mlp.h` y `modelo_co2.h` de la red). Mide siempre y guarda una fila promedio cada `interval` segundos durante una sesión. |
 | `guardar_csv.py` | **Copia el CSV del ESP32 a la PC por el puerto serie.** |
 | `merge.py` | **Une** el CSV del ESP32 con el export del AQM65, minuto a minuto. |
 | `compensar.py` | **Quita el efecto de temperatura y humedad** a BME688 y PMS5003. Opcional pero recomendado. (Rama `dev`.) |

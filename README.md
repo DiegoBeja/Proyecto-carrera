@@ -7,7 +7,7 @@ El ESP32 guarda un archivo `.csv` en su propia memoria, y un script de Python lo
 ## Contenido del repositorio
 
 ```
-├── esp32s3_logger.ino     Firmware de registro de PMS5003 + BME688 (programa principal)
+├── esp32s3_logger/        Firmware: esp32s3_logger.ino + co2_mlp.h + modelo_co2.h (red de CO2)
 ├── guardar_csv.py         Copia el CSV del ESP32 a la PC
 ├── merge.py               Une el CSV del ESP32 con el export de 1 minuto del AQM65
 ├── entrenar.py            Compara modelos y escribe los resultados en resultados/
@@ -46,7 +46,7 @@ En Arduino IDE elige la placa **ESP32S3 Dev Module**. Si conectas el ESP32 por s
 
 ## Parámetros que debes cambiar
 
-Todos están al inicio de `esp32s3_logger.ino`.
+Todos están al inicio de `esp32s3_logger/esp32s3_logger.ino`.
 
 | Parámetro | Valor por defecto | Qué hace y cuándo cambiarlo |
 | --- | --- | --- |
@@ -77,7 +77,7 @@ Notas importantes:
 
 ## Subir el firmware al ESP32
 
-1. Guarda `esp32s3_logger.ino` en una carpeta con su mismo nombre (`esp32s3_logger`) y ábrelo con Arduino IDE.
+1. Abre `esp32s3_logger/esp32s3_logger.ino` con Arduino IDE (la carpeta ya tiene el nombre que pide el IDE y los `.h` de la red).
 2. Edita los parámetros de la sección anterior.
 3. Elige la placa y el puerto (Herramientas → Placa / Puerto).
 4. Presiona **Subir**. No hay que repetirlo después; el programa queda grabado.

@@ -4,7 +4,7 @@
 exportar_modelo.py - Pasa el MLP guardado por entrenar.py --buscar-mlp a un .h para el ESP32.
 
 Uso:
-  python exportar_modelo.py                                  # modelo_mlp/modelo_mlp.joblib -> modelo_co2.h
+  python exportar_modelo.py                                  # modelo_mlp/modelo_mlp.joblib -> esp32s3_logger/modelo_co2.h
   python exportar_modelo.py --modelo otra/modelo_mlp.joblib --prueba entrenamiento/S02_train.csv
 
 Genera modelo_co2.h con:
@@ -12,7 +12,7 @@ Genera modelo_co2.h con:
   - pesos de las N redes que se promedian (una por semilla),
   - rangos min/max de cada entrada en el entrenamiento (para avisar si se sale),
   - 3 vectores de prueba con la prediccion de Python (comando "mlp test" en el ESP32).
-Copien modelo_co2.h y co2_mlp.h a la misma carpeta que esp32s3_logger.ino.
+Despues abran esp32s3_logger/esp32s3_logger.ino en Arduino IDE y suban el firmware.
 """
 import argparse
 import sys
@@ -47,7 +47,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--modelo", default="modelo_mlp/modelo_mlp.joblib")
     ap.add_argument("--prueba", default="entrenamiento/S02_train.csv", help="CSV para los vectores de prueba")
-    ap.add_argument("--out", default="modelo_co2.h")
+    ap.add_argument("--out", default="esp32s3_logger/modelo_co2.h")
     a = ap.parse_args()
 
     g = joblib.load(a.modelo)
