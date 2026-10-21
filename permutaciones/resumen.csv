@@ -1,0 +1,4 @@
+prueba,entrenamiento,variante,red,parametros,MAE_validacion,MAE_val_promedio,MAE_prueba,RMSE_prueba,R2_prueba,MAE_prueba_promedio,mejora_vs_promedio_pct
+S01,S02+S03,sin_presion,mlp_8x4_a0.1_tanh,209,104.133,73.311,179.897,225.903,-2.309,91.903,-95.747
+S02,S01+S03,sin_presion,mlp_16_a0.1_tanh,353,64.27,72.215,94.742,115.723,0.184,100.523,5.751
+S03,S01+S02,sin_presion,mlp_8x4_a1_tanh,209,118.042,89.096,185.005,232.421,-34.326,39.442,-369.054
