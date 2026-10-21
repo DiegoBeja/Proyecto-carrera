@@ -45,6 +45,7 @@ from sklearn.linear_model import BayesianRidge, ElasticNet, HuberRegressor, Line
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import LeaveOneGroupOut
 from sklearn.neighbors import KNeighborsRegressor
+from sklearn.neural_network import MLPRegressor
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVR
@@ -153,6 +154,14 @@ def modelos(cols):
         "15_arbol_chico": DecisionTreeRegressor(max_depth=3, min_samples_leaf=5, random_state=0),
         "16_gbm_chico": GradientBoostingRegressor(
             n_estimators=100, learning_rate=0.05, max_depth=2, min_samples_leaf=5, subsample=0.8, random_state=0
+        ),
+        # red chica (1 capa oculta de 8) con regularizacion fuerte; lbfgs converge mejor que adam con pocos datos
+        "17_mlp_chico": escalado_y(
+            make_pipeline(
+                StandardScaler(),
+                MLPRegressor(hidden_layer_sizes=(8,), activation="tanh", solver="lbfgs", alpha=1.0,
+                             max_iter=5000, random_state=0),
+            )
         ),
     }
 
