@@ -22,6 +22,12 @@
  *   start | stop
  *   e <texto>                   anota un evento en la siguiente fila (ej. "e entra persona 3")
  *   dump <archivo> | del <archivo>
+ *   mlp test                    compara la red con los vectores de prueba de Python
+ *
+ * Estimacion de CO2 (co2_mlp.h + modelo_co2.h, generado por exportar_modelo.py):
+ *  - Cada 60 s, con o sin sesion, promedia el minuto y corre la red. Imprime
+ *    "CO2 estimado: ... ppm" y una linea "#PRED,epoch,co2_ppm,fuera_de_rango" para el dashboard.
+ *  - Las 5 primeras estimaciones no tienen todavia la tendencia de 5 min (igual que en el entrenamiento).
  */
 
 #include <Arduino.h>
@@ -32,6 +38,7 @@
 #include <sys/time.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME680.h>
+#include "co2_mlp.h"
 
 // ======================= PINES =======================
 constexpr int PIN_SDA    = 15;
@@ -71,6 +78,14 @@ uint32_t effInterval = 10, effDuration = 120;
 double   pmsSum[12]; uint32_t pmsN = 0;   // 0-5: PM (cf1 y atm), 6-11: conteos por tamano
 double   bmeSum[4];  uint32_t bmeN = 0;   // temp, HR, presion (hPa), resistencia de gas (ohm)
 String   pendingEvent;
+
+// Acumuladores del minuto para la estimacion de CO2 (siempre activos, con o sin sesion)
+constexpr uint32_t PRED_MS = 60000;
+double   predPms[6]; uint32_t predPmsN = 0;   // conteos n0_3 ... n10
+double   predBme[3]; uint32_t predBmeN = 0;   // temp, HR, resistencia de gas
+uint32_t nextPredMs = 0;
+EstimadorCO2 estimador;
+double   lastCo2 = NAN; int lastFuera = 0;
 
 // Ultimas lecturas (para "status")
 double   lastPms[12]; bool havePms = false;
@@ -171,9 +186,11 @@ void pmsService() {
             double v = ((uint16_t)buf[4 + 2 * i] << 8) | buf[5 + 2 * i];
             lastPms[i] = v;
             if (running) pmsSum[i] += v;
+            if (i >= 6) predPms[i - 6] += v;
           }
           havePms = true;
           if (running) pmsN++;
+          predPmsN++;
         }
       }
     }
@@ -193,8 +210,40 @@ void bmeService() {
     lastBme[i] = v[i];
     if (running) bmeSum[i] += v[i];
   }
+  predBme[0] += v[0]; predBme[1] += v[1]; predBme[2] += v[3];
+  predBmeN++;
   haveBme = true;
   if (running) bmeN++;
+}
+
+// ================== ESTIMACION DE CO2 ================
+void predService() {
+  if ((int32_t)(millis() - nextPredMs) < 0) return;
+  nextPredMs += PRED_MS;
+  if (!predPmsN || !predBmeN) {
+    Serial.println("CO2 estimado: sin datos de PMS5003 o BME688 en este minuto");
+  } else {
+    MinutoCO2 m;
+    for (int i = 0; i < 6; i++) m.n[i] = predPms[i] / predPmsN;
+    m.tempC = predBme[0] / predBmeN; m.rh = predBme[1] / predBmeN; m.gasOhm = predBme[2] / predBmeN;
+    lastCo2 = estimador.agregarMinuto(m);
+    lastFuera = estimador.fueraDeRango;
+    Serial.printf("CO2 estimado: %.0f ppm | minuto %d | entradas fuera del rango de entrenamiento: %d/%d\n",
+                  lastCo2, estimador.minutos(), lastFuera, MLP_ENTRADAS);
+    Serial.printf("#PRED,%lu,%.1f,%d\n", timeSynced ? (unsigned long)time(nullptr) : 0UL, lastCo2, lastFuera);
+  }
+  for (int i = 0; i < 6; i++) predPms[i] = 0;
+  for (int i = 0; i < 3; i++) predBme[i] = 0;
+  predPmsN = predBmeN = 0;
+}
+
+void mlpTest() {
+  Serial.printf("Red %s (%d redes de %d-%d-1)\n", MLP_NOMBRE, MLP_REDES, MLP_ENTRADAS, MLP_OCULTA);
+  for (int k = 0; k < MLP_N_PRUEBAS; k++) {
+    double p = mlpPredecir(MLP_PRUEBA_X + k * MLP_ENTRADAS);
+    Serial.printf("  prueba %d: ESP32 %.2f ppm | Python %.2f ppm | diferencia %.3f\n",
+                  k, p, MLP_PRUEBA_Y[k], p - MLP_PRUEBA_Y[k]);
+  }
 }
 
 // ================== FILA DEL CSV =====================
@@ -310,12 +359,15 @@ void printStatus() {
   else         Serial.println("PMS5003: sin datos (revisen el cable TX -> pin 17 y la alimentacion de 5 V)");
   if (haveBme) Serial.printf("BME688: T=%.1f C  HR=%.1f %%  P=%.1f hPa  gas=%.0f ohm\n", lastBme[0], lastBme[1], lastBme[2], lastBme[3]);
   else         Serial.println(bmeOk ? "BME688: esperando primera lectura" : "BME688: NO detectado (revisen SDA 15, SCL 16)");
+  if (isnan(lastCo2)) Serial.printf("CO2 estimado: todavia no (cada %lu s)\n", (unsigned long)(PRED_MS / 1000));
+  else Serial.printf("CO2 estimado: %.0f ppm (red %s, fuera de rango %d/%d)\n", lastCo2, MLP_NOMBRE, lastFuera, MLP_ENTRADAS);
   listFiles();
 }
 
 void printHelp() {
   Serial.println("Comandos: help | status | ls | set interval <s> | set duration <min> | set id <nombre>");
   Serial.println("          settime AAAA-MM-DD HH:MM:SS | start | stop | e <evento> | dump <archivo> | del <archivo>");
+  Serial.println("          mlp test");
 }
 
 // ================== COMANDOS =========================
@@ -343,6 +395,7 @@ void handleLine(String line) {
     pendingEvent = sanitizeEvent(arg);
     Serial.println("Evento anotado para la siguiente fila: " + pendingEvent);
   }
+  else if (cmd == "mlp" && arg == "test") { mlpTest(); }
   else if (cmd == "settime") {
     if (running) { Serial.println("No cambien la hora durante una sesion."); return; }
     int y, mo, d, h, mi, s;
@@ -421,6 +474,7 @@ void setup() {
     bme.setGasHeater(HEATER_TEMP_C, HEATER_MS);
   }
   nextBmeMs = millis();
+  nextPredMs = millis() + PRED_MS;
 
   timeSynced = syncTime();
   resetAccumulators();
@@ -432,6 +486,7 @@ void loop() {
   readSerial();
   pmsService();
   bmeService();
+  predService();
 
   if (running && (int32_t)(millis() - nextLogMs) >= 0) {
     uint32_t elapsed = (rowCount + 1) * effInterval;
