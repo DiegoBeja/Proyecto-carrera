@@ -1,0 +1,47 @@
+{
+  "ventana": 5,
+  "sin_presion": true,
+  "sin_humedad": true,
+  "saltar_min": 0,
+  "nombre": "mlp_8_a10_relu",
+  "capas": [
+    8
+  ],
+  "alpha": 10.0,
+  "activacion": "relu",
+  "parametros": 145,
+  "semillas": 5,
+  "cols": [
+    "log_n0_3",
+    "log_n0_5",
+    "log_n1_0",
+    "log_n2_5",
+    "log_n5_0",
+    "log_n10",
+    "log_pm1_est",
+    "log_pm2_5_est",
+    "temp_c",
+    "log10_gas",
+    "log10_gas_m5",
+    "temp_c_m5",
+    "log_n0_3_m5",
+    "log10_gas_d5",
+    "temp_c_d5",
+    "log_n0_3_d5"
+  ],
+  "sesiones_entrenamiento": [
+    "S02",
+    "S03",
+    "S05",
+    "S07",
+    "S08",
+    "S09",
+    "S10"
+  ],
+  "co2_media_entrenamiento": 847.8,
+  "validacion": {
+    "MAE": 94.48148426216862,
+    "RMSE": 132.89094094647803,
+    "MAE_media": 112.1768783068783
+  }
+}

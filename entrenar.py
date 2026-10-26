@@ -104,7 +104,10 @@ def cargar(rutas, saltar_min):
     return df
 
 
-def crear_features(df, ventana, sin_presion):
+HUMEDAD = ["rh_pct", "abs_hum_gm3"]   # --sin-humedad las quita (y sus promedios/tendencias)
+
+
+def crear_features(df, ventana, sin_presion, sin_humedad=False):
     df = df.copy()
     for c in CONTEOS + ESTIMADOS:
         df["log_" + c] = np.log1p(df[c])
@@ -120,6 +123,8 @@ def crear_features(df, ventana, sin_presion):
     )
     if not sin_presion:
         cols.append("pressure_hpa")
+    if sin_humedad:
+        cols = [c for c in cols if not any(c == h or c.startswith(h + "_") for h in HUMEDAD)]
     return df, cols
 
 
@@ -135,7 +140,7 @@ def modelos(cols):
     """Modelos pensados para pocos datos: lineales regularizados, kernel, vecinos y arboles chicos."""
     solo_lineal = ColumnTransformer([("c", "passthrough", ["temp_c", "rh_pct"])])
     kernel_gp = ConstantKernel(1.0) * RBF(length_scale=3.0) + WhiteKernel(noise_level=0.5)
-    return {
+    mods = {
         "01_media": DummyRegressor(strategy="mean"),
         "02_lineal_T_HR": make_pipeline(solo_lineal, LinearRegression()),
         "03_ridge": make_pipeline(StandardScaler(), Ridge(alpha=10.0)),
@@ -171,6 +176,9 @@ def modelos(cols):
             )
         ),
     }
+    if not {"temp_c", "rh_pct"} <= set(cols):
+        del mods["02_lineal_T_HR"]   # sin T o HR de entrada este modelo no existe
+    return mods
 
 
 # --------------------------------------------------------------------------
@@ -341,6 +349,8 @@ def main():
     ap.add_argument("--saltar-min", type=int, default=0, help="descartar los primeros N min de cada sesion (calentamiento)")
     ap.add_argument("--ventana", type=int, default=5, help="minutos para promedio movil y tendencia (5)")
     ap.add_argument("--sin-presion", action="store_true", help="no usar pressure_hpa (puede delatar el dia, no el CO2)")
+    ap.add_argument("--sin-humedad", action="store_true",
+                    help="no usar HR ni humedad absoluta (ni sus promedios/tendencias) como entradas")
     ap.add_argument("--test", nargs="*", default=[], help="session_id de las sesiones de prueba final (se apartan)")
     ap.add_argument("--final", action="store_true", help="entrenar con todo lo demas y evaluar en --test (hacerlo UNA vez)")
     ap.add_argument("--salida", default="resultados", help="carpeta de resultados")
@@ -351,7 +361,7 @@ def main():
 
     rutas = a.csv or [str(Path(CARPETA) / "*.csv")]
     df = cargar(rutas, a.saltar_min)
-    df, cols = crear_features(df, a.ventana, a.sin_presion)
+    df, cols = crear_features(df, a.ventana, a.sin_presion, a.sin_humedad)
     out = Path(a.salida)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -366,7 +376,7 @@ def main():
         print(f"Sesiones apartadas para la prueba final: {sorted(test['session_id'].unique())} (no se tocan sin --final)")
 
     if a.buscar_mlp:
-        info = dict(ventana=a.ventana, sin_presion=a.sin_presion, saltar_min=a.saltar_min)
+        info = dict(ventana=a.ventana, sin_presion=a.sin_presion, sin_humedad=a.sin_humedad, saltar_min=a.saltar_min)
         buscar_mlp(df, cols, a.ventana, a.semillas, out, info)
         return
 

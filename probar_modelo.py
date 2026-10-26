@@ -35,7 +35,7 @@ def main():
     modelo, meta = guardado["modelo"], guardado["meta"]
 
     df = cargar([a.csv], meta["saltar_min"])
-    df, cols = crear_features(df, meta["ventana"], meta["sin_presion"])
+    df, cols = crear_features(df, meta["ventana"], meta["sin_presion"], meta.get("sin_humedad", False))
     if cols != meta["cols"]:
         sys.exit("Las variables de este CSV no coinciden con las del modelo.")
     usadas = set(meta["sesiones_entrenamiento"]) & set(df["session_id"])
